@@ -1,4 +1,4 @@
-import React from "react";
+import React from 'react';
 
 const PageNotFound = () => {
   return (
@@ -9,4 +9,4 @@ const PageNotFound = () => {
 };
 
 //FIXME: missing keywords
-PageNotFound;
+export default PageNotFound;

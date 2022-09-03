@@ -1,8 +1,8 @@
 // https://firebase.google.com/docs/storage/web/upload-files#full_example
 // https://www.npmjs.com/package/browser-image-resizer#asyncawait
 
-import React, { useState, useContext, useEffect } from "react";
-import firebase from "firebase/app";
+import React, { useState, useContext, useEffect } from 'react';
+import firebase from 'firebase/app';
 
 import {
   Container,
@@ -13,26 +13,27 @@ import {
   Button,
   Spinner,
   Row,
-  Col
-} from "reactstrap";
+  Col,
+} from 'reactstrap';
 
 // to compress image before uploading to the server
-import { readAndCompressImage } from "browser-image-resizer";
+import { readAndCompressImage } from 'browser-image-resizer';
 
 // configs for image resizing
-//TODO: add image configurations
+//TODO: FIXED add image configurations
+import { imageConfig } from '../utils/config';
 
-import { MdAddCircleOutline } from "react-icons/md";
+import { MdAddCircleOutline } from 'react-icons/md';
 
-import { v4 } from "uuid";
+import { v4 } from 'uuid';
 
 // context stuffs
-import { ContactContext } from "../context/Context";
-import { CONTACT_TO_UPDATE } from "../context/action.types";
+import { ContactContext } from '../context/Context';
+import { CONTACT_TO_UPDATE, SET_LOADING } from '../context/action.types';
 
-import { useHistory } from "react-router-dom";
+import { useHistory } from 'react-router-dom';
 
-import { toast } from "react-toastify";
+import { toast } from 'react-toastify';
 
 const AddContact = () => {
   // destructuring state and dispatch from context state
@@ -44,10 +45,10 @@ const AddContact = () => {
   const history = useHistory();
 
   // simple state of all component
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phoneNumber, setPhoneNumber] = useState("");
-  const [address, setAddress] = useState("");
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [address, setAddress] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [downloadUrl, setDownloadUrl] = useState(null);
   const [star, setStar] = useState(false);
@@ -71,24 +72,117 @@ const AddContact = () => {
   }, [contactToUpdate]);
 
   // To upload image to firebase and then set the the image link in the state of the app
-  const imagePicker = async e => {
+  const imagePicker = async (e) => {
     // TODO: upload image and set D-URL to state
+
+    try {
+      const file = e.target.files[0];
+      let resizedImage = await readAndCompressImage(file, imageConfig);
+
+      var metadata = {
+        contentType: file.type,
+      };
+
+      const storageRef = await firebase.storage().ref();
+
+      var uploadTask = storageRef
+        .child('images/' + file.name)
+        .put(resizedImage, metadata);
+
+      uploadTask.on(
+        firebase.storage.TaskEvent.STATE_CHANGED,
+        (snapshot) => {
+          setIsUploading(true);
+          var progress =
+            (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          console.log('Upload is ' + progress + '% done');
+          switch (snapshot.state) {
+            case firebase.storage.TaskState.PAUSED: // or 'paused'
+              console.log('Upload is paused');
+              break;
+            case firebase.storage.TaskState.RUNNING: // or 'running'
+              console.log('Upload is running');
+              break;
+            default:
+              break;
+          }
+          if (progress === 100) {
+            setIsUploading(false);
+            toast('image uploaded', {
+              type: 'success',
+            });
+          }
+        },
+        (error) => {
+          // A full list of error codes is available at
+          // https://firebase.google.com/docs/storage/web/handle-errors
+          toast('something is wrong in state change', { type: 'error' });
+        },
+        () => {
+          uploadTask.snapshot.ref
+            .getDownloadURL()
+            .then((downloadURL) => {
+              setDownloadUrl(downloadURL);
+            })
+            .catch((err) => console.error(err));
+        }
+      );
+    } catch (error) {
+      console.error(error);
+      toast('Something went wrong', {
+        type: 'error',
+      });
+    }
   };
 
   // setting contact to firebase DB
   const addContact = async () => {
     //TODO: add contact method
+    try {
+      firebase
+        .database()
+        .ref('contacts/' + v4())
+        .set({
+          name,
+          email,
+          phoneNumber,
+          address,
+          picture: downloadUrl,
+          star,
+        });
+    } catch (error) {
+      console.error(error);
+      toast('Oops...', { type: 'error' });
+    }
   };
 
   // to handle update the contact when there is contact in state and the user had came from clicking the contact update icon
   const updateContact = async () => {
     //TODO: update contact method
+    try {
+      firebase
+        .database()
+        .ref('contacts/' + contactToUpdateKey)
+        .set({
+          name,
+          email,
+          phoneNumber,
+          address,
+          picture: downloadUrl,
+          star,
+        });
+    } catch (error) {
+      console.error(error);
+      toast('Oops...', { type: 'error' });
+    }
   };
 
   // firing when the user click on submit button or the form has been submitted
-  const handleSubmit = e => {
+  const handleSubmit = (e) => {
     e.preventDefault();
+    isUpdate ? updateContact() : addContact();
 
+    toast('Success..', { type: 'success' });
     // isUpdate wll be true when the user came to update the contact
     // when their is contact then updating and when no contact to update then adding contact
     //TODO: set isUpdate value
@@ -97,37 +191,37 @@ const AddContact = () => {
     dispatch({
       type: CONTACT_TO_UPDATE,
       payload: null,
-      key: null
+      key: null,
     });
 
     // after adding/updating contact then sending to the contacts
     // TODO :- also sending when their is any errors
-    history.push("/");
+    history.push('/');
   };
 
   // return the spinner when the image has been added in the storage
   // showing the update / add contact based on the  state
   return (
-    <Container fluid className="mt-5">
+    <Container fluid className='mt-5'>
       <Row>
-        <Col md="6" className="offset-md-3 p-2">
+        <Col md='6' className='offset-md-3 p-2'>
           <Form onSubmit={handleSubmit}>
-            <div className="text-center">
+            <div className='text-center'>
               {isUploading ? (
-                <Spinner type="grow" color="primary" />
+                <Spinner type='grow' color='primary' />
               ) : (
                 <div>
-                  <label htmlFor="imagepicker" className="">
-                    <img src={downloadUrl} alt="" className="profile" />
+                  <label htmlFor='imagepicker' className=''>
+                    <img src={downloadUrl} alt='' className='profile' />
                   </label>
                   <input
-                    type="file"
-                    name="image"
-                    id="imagepicker"
-                    accept="image/*"
+                    type='file'
+                    name='image'
+                    id='imagepicker'
+                    accept='image/*'
                     multiple={false}
-                    onChange={e => imagePicker(e)}
-                    className="hidden"
+                    onChange={(e) => imagePicker(e)}
+                    className='hidden'
                   />
                 </div>
               )}
@@ -135,63 +229,63 @@ const AddContact = () => {
 
             <FormGroup>
               <Input
-                type="text"
-                name="name"
-                id="name"
-                placeholder="Name"
+                type='text'
+                name='name'
+                id='name'
+                placeholder='Name'
                 value={name}
-                onChange={e => setName(e.target.value)}
+                onChange={(e) => setName(e.target.value)}
               />
             </FormGroup>
             <FormGroup>
               <Input
-                type="email"
-                name="email"
-                id="email"
+                type='email'
+                name='email'
+                id='email'
                 value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="Email"
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder='Email'
               />
             </FormGroup>
             <FormGroup>
               <Input
-                type="number"
-                name="number"
-                id="phonenumber"
+                type='number'
+                name='number'
+                id='phonenumber'
                 value={phoneNumber}
-                onChange={e => setPhoneNumber(e.target.value)}
-                placeholder="phone number"
+                onChange={(e) => setPhoneNumber(e.target.value)}
+                placeholder='phone number'
               />
             </FormGroup>
             <FormGroup>
               <Input
-                type="textarea"
-                name="area"
-                id="area"
+                type='textarea'
+                name='area'
+                id='area'
                 value={address}
-                onChange={e => setAddress(e.target.value)}
-                placeholder="address"
+                onChange={(e) => setAddress(e.target.value)}
+                placeholder='address'
               />
             </FormGroup>
             <FormGroup check>
               <Label check>
                 <Input
-                  type="checkbox"
+                  type='checkbox'
                   onChange={() => {
                     setStar(!star);
                   }}
                   checked={star}
-                />{" "}
-                <span className="text-right">Mark as Star</span>
+                />{' '}
+                <span className='text-right'>Mark as Star</span>
               </Label>
             </FormGroup>
             <Button
-              type="submit"
-              color="primary"
+              type='submit'
+              color='primary'
               block
-              className="text-uppercase"
+              className='text-uppercase'
             >
-              {isUpdate ? "Update Contact" : "Add Contact"}
+              {isUpdate ? 'Update Contact' : 'Add Contact'}
             </Button>
           </Form>
         </Col>
